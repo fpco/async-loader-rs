@@ -1,2 +1,3 @@
-# async-loader-rs
-Async loader/cacher for web applications
+# Async Loader
+
+Load and cache data from any network service.
