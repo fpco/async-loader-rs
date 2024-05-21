@@ -250,9 +250,31 @@ impl<Loader: CacheLoader> Latest<Loader> {
 #[axum::async_trait]
 pub trait CacheLoader: Send + Sync + 'static {
     type Key: std::hash::Hash + Eq + Clone + Send + Sync + 'static;
+    type Output: Send + Sync + 'static;
+
+    async fn load(&self, key: Self::Key) -> anyhow::Result<Self::Output>;
+
+    /// Convert the [Self::Output] value into an axum [Response].
+    fn into_response(output: &Self::Output) -> Response<Body>;
+}
+
+/// Something that can load a value for the cacher.
+#[axum::async_trait]
+pub trait CacheLoaderJson: Send + Sync + 'static {
+    type Key: std::hash::Hash + Eq + Clone + Send + Sync + 'static;
     type Output: serde::Serialize + Send + Sync + 'static;
 
     async fn load(&self, key: Self::Key) -> anyhow::Result<Self::Output>;
+}
+
+#[axum::async_trait]
+impl<Loader: CacheLoaderJson> CacheLoader for Loader {
+    type Key = Loader::Key;
+    type Output = Loader::Output;
+
+    async fn load(&self, key: Self::Key) -> anyhow::Result<Self::Output> {
+        self.load(key).await
+    }
 
     /// Convert the [Self::Output] value into an axum [Response].
     ///
@@ -592,6 +614,8 @@ mod tests {
     use axum::async_trait;
     use tokio::task::JoinSet;
 
+    use crate::CacheLoaderJson;
+
     use super::{AsyncLoader, AsyncLoaderBuilder, CacheLoader, StaleDelay, ValueForRender};
 
     struct MyData {
@@ -679,7 +703,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl CacheLoader for TestLoader {
+    impl CacheLoaderJson for TestLoader {
         type Key = ();
         type Output = u8;
 
