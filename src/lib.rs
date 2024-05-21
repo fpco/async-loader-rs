@@ -5,7 +5,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use axum::{http::HeaderValue, response::IntoResponse, Json};
+use axum::{
+    body::Body,
+    http::{HeaderValue, Response},
+    response::IntoResponse,
+    Json,
+};
 use parking_lot::{Mutex, RwLock};
 use reqwest::{header::CACHE_CONTROL, StatusCode};
 use tokio::sync::broadcast;
@@ -192,7 +197,7 @@ impl<Loader: CacheLoader> ValueForRender<Loader> {
     pub fn into_response(self, config: &AsyncLoaderConfig) -> axum::response::Response {
         match self {
             ValueForRender::Success { value, loaded } => {
-                let mut res = Json(&*value).into_response();
+                let mut res = Loader::into_response(&*value);
                 if let Some(cache_time) = config.reload_delay.checked_sub(loaded.elapsed()) {
                     if let Ok(value) =
                         HeaderValue::from_str(&format!("public, max-age={}", cache_time.as_secs()))
@@ -248,6 +253,13 @@ pub trait CacheLoader: Send + Sync + 'static {
     type Output: serde::Serialize + Send + Sync + 'static;
 
     async fn load(&self, key: Self::Key) -> anyhow::Result<Self::Output>;
+
+    /// Convert the [Self::Output] value into an axum [Response].
+    ///
+    /// By default, this will convert to a JSON representation.
+    fn into_response(output: &Self::Output) -> Response<Body> {
+        Json(output).into_response()
+    }
 }
 
 impl AsyncLoaderBuilder {
