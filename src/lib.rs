@@ -75,6 +75,7 @@ pub struct AsyncLoaderBuilder {
 
 #[derive(Default)]
 pub enum StaleDelay {
+    /// Default will be twice the [AsyncLoaderBuilder::reload_delay]
     #[default]
     Default,
     Duration(Duration),
