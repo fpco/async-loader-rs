@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::Debug,
+    fmt::{Debug, Display},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -168,9 +168,28 @@ pub enum ValueForRender<Loader: CacheLoader> {
     /// Error while loading the value
     Error {
         message: Arc<str>,
+        status: StatusCode,
         /// If there's a cached value available that's considered stale, provide it here.
         stale_cache: Option<Latest<Loader>>,
     },
+}
+
+/// An error type that wraps up a [axum::Response].
+///
+/// If you return this as an error value from [CacheLoader::load],
+/// it will be used as the error response.
+#[derive(Clone, Debug)]
+pub struct ErrorResponse {
+    pub status: StatusCode,
+    pub message: String,
+}
+
+impl std::error::Error for ErrorResponse {}
+
+impl Display for ErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
 }
 
 impl<Loader: CacheLoader> Clone for ValueForRender<Loader> {
@@ -182,9 +201,11 @@ impl<Loader: CacheLoader> Clone for ValueForRender<Loader> {
             },
             ValueForRender::Error {
                 message,
+                status,
                 stale_cache,
             } => ValueForRender::Error {
                 message: message.clone(),
+                status: *status,
                 stale_cache: stale_cache.clone(),
             },
         }
@@ -210,12 +231,9 @@ impl<Loader: CacheLoader> ValueForRender<Loader> {
             }
             ValueForRender::Error {
                 message,
+                status,
                 stale_cache: _,
-            } => {
-                let mut res = message.as_ref().to_owned().into_response();
-                *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                res
-            }
+            } => (status, message.as_ref().to_owned()).into_response(),
         }
     }
 }
@@ -336,6 +354,7 @@ impl<Loader: CacheLoader> AsyncLoader<Loader> {
                     tracing::error!("AsyncLoader::get_response: impossible Err received: {err:?}");
                     ValueForRender::Error {
                         message: "Internal error detected: broadcast channel is gone".into(),
+                        status: StatusCode::INTERNAL_SERVER_ERROR,
                         stale_cache,
                     }
                 }
@@ -369,6 +388,7 @@ impl<Loader: CacheLoader> AsyncLoader<Loader> {
                     tracing::error!("AsyncLoader::get_response: impossible Err received: {err:?}");
                     ValueForRender::Error {
                         message: "Internal error detected: broadcast channel is gone".into(),
+                        status: StatusCode::INTERNAL_SERVER_ERROR,
                         stale_cache,
                     }
                 }
@@ -410,6 +430,7 @@ impl<Loader: CacheLoader> AsyncLoader<Loader> {
             ValueForRender::Success { value, loaded: _ } => Ok(value),
             ValueForRender::Error {
                 message,
+                status: _,
                 stale_cache,
             } => match stale_cache {
                 Some(latest) => Ok(latest.value),
@@ -490,6 +511,7 @@ impl<Loader: CacheLoader> AsyncLoader<Loader> {
                     }),
                     ValueForRender::Error {
                         message: _,
+                        status: _,
                         stale_cache,
                     } => stale_cache.clone(),
                 };
@@ -571,8 +593,13 @@ impl<Loader: CacheLoader> AsyncLoader<Loader> {
             },
             Err(err) => {
                 tracing::error!("AsyncLoader::do_update: {err:?}");
+                let (message, status) = match err.downcast() {
+                    Ok(ErrorResponse { status, message }) => (message, status),
+                    Err(err) => (err.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+                };
                 ValueForRender::Error {
-                    message: err.to_string().into(),
+                    message: message.into(),
+                    status,
                     stale_cache,
                 }
             }
