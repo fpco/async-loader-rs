@@ -279,6 +279,13 @@ pub trait CacheLoader: Send + Sync + 'static {
     fn into_response(output: &Self::Output) -> Response<Body> {
         Json(output).into_response()
     }
+
+    /// Convert the error output into an error message and status code.
+    ///
+    /// By default, uses the [Display] trait and an internal server error (500 status code).
+    fn display_error(err: anyhow::Error) -> (String, StatusCode) {
+        (err.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
+    }
 }
 
 impl AsyncLoaderBuilder {
@@ -595,7 +602,7 @@ impl<Loader: CacheLoader> AsyncLoader<Loader> {
                 tracing::error!("AsyncLoader::do_update: {err:?}");
                 let (message, status) = match err.downcast() {
                     Ok(ErrorResponse { status, message }) => (message, status),
-                    Err(err) => (err.to_string(), StatusCode::INTERNAL_SERVER_ERROR),
+                    Err(err) => Loader::display_error(err),
                 };
                 ValueForRender::Error {
                     message: message.into(),
