@@ -1,0 +1,36 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  rust_tests:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: test-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just@1.25.2,nextest@0.9.82
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.81.0
+          components: rustfmt, clippy
+      - name: Compile
+        run: just cargo-compile
+      - name: Lint
+        run: just lint
+      - name: Test
+        run: just carg-test
