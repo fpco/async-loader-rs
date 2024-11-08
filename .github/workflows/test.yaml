@@ -33,4 +33,4 @@ jobs:
       - name: Lint
         run: just lint
       - name: Test
-        run: just carg-test
+        run: just cargo-test
