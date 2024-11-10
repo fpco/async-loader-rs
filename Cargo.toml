@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.35.0" }
+tokio = { version = "1.41.1" }
 anyhow = "1"
-axum = "0.7.4"
-serde = { version = "1.0.193", features = [ "derive" ] }
+axum = "0.7.7"
+serde = { version = "1.0.214", features = [ "derive" ] }
 tracing = "0.1.40"
-reqwest = { version = "0.12.1", default-features = false, features = [ "rustls-tls" ] }
-parking_lot = "0.12.1"
+reqwest = { version = "0.12.9", default-features = false, features = [ "rustls-tls" ] }
+parking_lot = "0.12.3"
 
 [lints.clippy]
 as_conversions = "deny"
