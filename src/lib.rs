@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
+    future::Future,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -266,12 +267,11 @@ impl<Loader: CacheLoader> Latest<Loader> {
 }
 
 /// Something that can load a value for the cacher.
-#[axum::async_trait]
 pub trait CacheLoader: Send + Sync + 'static {
     type Key: std::hash::Hash + Eq + Clone + Send + Sync + 'static;
     type Output: serde::Serialize + Send + Sync + 'static;
 
-    async fn load(&self, key: Self::Key) -> anyhow::Result<Self::Output>;
+    fn load(&self, key: Self::Key) -> impl Future<Output = anyhow::Result<Self::Output>> + Send;
 
     /// Convert the [Self::Output] value into an axum [Response].
     ///
@@ -624,7 +624,6 @@ mod tests {
     use std::{sync::Mutex, time::Duration};
 
     use anyhow::anyhow;
-    use axum::async_trait;
     use tokio::task::JoinSet;
 
     use super::{AsyncLoader, AsyncLoaderBuilder, CacheLoader, StaleDelay, ValueForRender};
@@ -713,7 +712,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl CacheLoader for TestLoader {
         type Key = ();
         type Output = u8;
@@ -722,7 +720,7 @@ mod tests {
             let mut guard = self.num.lock().unwrap();
             if guard.num == 0 || guard.failures >= 1 {
                 guard.num += 1;
-                return Ok(guard.num);
+                Ok(guard.num)
             } else {
                 guard.failures += 1;
                 Err(anyhow!("Falied executing load"))
