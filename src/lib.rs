@@ -419,11 +419,15 @@ impl<Loader: CacheLoader> AsyncLoader<Loader> {
             ValueForRender::Success { .. } => result,
             ValueForRender::Error {
                 stale_cache: Some(stale_cache),
-                ..
-            } => ValueForRender::Success {
-                value: stale_cache.value,
-                loaded: stale_cache.loaded,
-            },
+                message,
+                status,
+            } => {
+                tracing::error!("AsyncLoader::get_value_allow_stale: using stale cache, status=={status}, message: {message}");
+                ValueForRender::Success {
+                    value: stale_cache.value,
+                    loaded: stale_cache.loaded,
+                }
+            }
             ValueForRender::Error { .. } => result,
         }
     }
